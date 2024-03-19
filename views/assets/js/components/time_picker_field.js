@@ -1,13 +1,19 @@
 class TimePickerField {
     constructor(element) {
         this.element = element
-        this.input = this.element.querySelector("input")
+        this.input = this.element.querySelector('input[type="text"]')
+        this.interval = parseInt(this.element.dataset.interval || 900) // seconds
         this.list = document.querySelector(`#${this.element.dataset.timeListId}`)
+        this.formatter = new Intl.DateTimeFormat([], {timeStyle: "short"})
 
-        // hoist list up to body to avoid z-index problems:
+        // populate and hoist list up to body (to avoid z-index problems):
+        this.populateList()
         document.body.append(this.list)
 
-        this.input.vComponent.prepareSubmit = this.prepareSubmit.bind(this)
+        // clobber the wrapped text_field's prepareSubmit function to avoid submitting two values
+        // (the plugin's and the text_field):
+        this.input.vComponent.prepareSubmit = (params) => {}
+
         this.input.addEventListener("focus", this.showPicker.bind(this))
         this.input.addEventListener("blur", (event) => {
             if (event.relatedTarget && event.relatedTarget.offsetParent == this.list) {
@@ -24,19 +30,10 @@ class TimePickerField {
                 this.list.querySelector("li").focus()
                 break
             case "Enter":
-                // if the user has typed all or part of a time, commit it on Enter:
-                const candidate = this.list.querySelector(".time-picker-field__time-list__item--candidate")
-
-                if (this.list.checkVisibility() && candidate) {
-                    this.input.vComponent.setValue(candidate.dataset.text)
-                    this.hidePicker()
-
-                    // ... and avoid submitting any enclosing <form>:
-                    event.preventDefault()
-                    return false
-                }
-
-                break
+                // hide picker and prevent any enclosing form from being submitted:
+                this.hidePicker()
+                event.preventDefault()
+                return false
             }
         })
 
@@ -45,7 +42,9 @@ class TimePickerField {
             this.showPicker()
 
             const value = this.input.value.toUpperCase()
-            const candidate = this.list.querySelector(`[data-text^="${value}"],[data-value^="${value}"]`)
+            const candidate = this.list.querySelector(
+                `[data-localized-value^="${value}"], [data-value^="${value}"]`
+            )
 
             if (!candidate) {
                 return
@@ -58,36 +57,6 @@ class TimePickerField {
             this.list.scrollTop = candidate.offsetTop
             candidate.classList.add("time-picker-field__time-list__item--candidate")
         })
-
-        for (const item of this.list.querySelectorAll("li")) {
-            item.addEventListener("click", this.clickItem.bind(this))
-            item.addEventListener("keydown", (event) => {
-                switch (event.key) {
-                case "ArrowDown":
-                    // Move focus to the next list item:
-                    event.preventDefault()
-                    if (item.nextElementSibling) {
-                        item.nextElementSibling.focus()
-                    }
-                    return false
-                case "ArrowUp":
-                    // Move focus to the previous list item, or the field if at the top of the list:
-                    event.preventDefault()
-                    if (item.previousElementSibling) {
-                        item.previousElementSibling.focus()
-                    } else if (item.dataset.index == "0") {
-                        this.input.focus()
-                    }
-                    return false
-                case "Enter":
-                    // Commit the highlighted list item:
-                    event.preventDefault()
-                    this.setValue(event.target.dataset.text)
-                    this.hidePicker()
-                    return false
-                }
-            })
-        }
     }
 
     showPicker() {
@@ -108,14 +77,40 @@ class TimePickerField {
         }
     }
 
-    setValue(value) {
-        this.input.vComponent.setValue(value)
+    setValue(string) {
+        const date = this.parseTimeString(string)
+
+        if (!date) {
+            console.warn(`Invalid time of day: ${string}`)
+            return
+        }
+
+        const text = this.formatter.format(date)
+        const value = TimePickerField.make24HourTimeString(date)
+
+        this.input.vComponent.setValue(text)
         this.input.vComponent.validate()
-        this.input.vComponent.mdcComponent.foundation_.notchOutline(Boolean(this.input.value))
+        this.input.vComponent.mdcComponent.foundation_.notchOutline(Boolean(value))
+    }
+
+    static make24HourTimeString(date) {
+        // this component deals with local time, so don't use getUTCHours or getUTCMinutes here.
+        const hours = date.getHours().toString().padStart(2, "0")
+        const minutes = date.getMinutes().toString().padStart(2, "0")
+
+        return `${hours}:${minutes}`
+    }
+
+    prepareSubmit(params) {
+        // submit a 24-hour time-of-day string:
+        const date = this.parseTimeString(this.input.value)
+        const value = date ? TimePickerField.make24HourTimeString(date) : ""
+
+        params.push([this.input.name, value])
     }
 
     validate(formData) {
-        if (!this.input.reportValidity()) {
+        if (!this.input.checkValidity()) {
             return {[this.input.id]: this.input.validationMessage}
         }
 
@@ -124,23 +119,13 @@ class TimePickerField {
         }
 
         // Attempt to parse the input's value to determine if it's valid:
-        const value = this.input.value
-        const now = new Date()
-        const year = now.getFullYear()
-        const month = now.getUTCMonth()
-        const day = now.getUTCDate()
-        const date = Date.parse(`${year}-${month}-${day}T${value}:00.000Z`)
+        const date = this.parseTimeString(this.input.value)
 
-        if (isNaN(date)) {
+        if (!date) {
             return {[this.input.id]: "Not a valid time of day"}
         }
 
         return true
-    }
-
-    prepareSubmit(params) {
-        // TODO: use originalName junk so input displays locale-aware time but submits 24-hour time.
-        params.push([this.input.name, this.input.value])
     }
 
     reset() {
@@ -148,7 +133,10 @@ class TimePickerField {
     }
 
     isDirty() {
-        return this.input.value.localeCompare(this.originalValue) != 0
+        const original = this.parseTimeString(this.originalValue)
+        const current = this.parseTimeString(this.input.value)
+
+        return current.localeCompare(original) != 0
     }
 
     destroy() {
@@ -157,9 +145,100 @@ class TimePickerField {
     }
 
     /** @private */
-    clickItem(event) {
-        this.setValue(event.target.dataset.text)
-        this.hidePicker()
+    parseTimeString(timeString) {
+        const now = new Date()
+        const year = now.getFullYear().toString()
+        const month = (now.getMonth() + 1).toString().padStart(2, "0")
+        const day = now.getDate().toString().padStart(2, "0")
+        debugger
+
+        // The only valid format accepted by Date.parse is `YYYY-MM-DDTHH:mm:ss.sssZ`, although
+        // some components "can be omitted". Here, the plugin omits the time zone offset so the
+        // date is parsed in the current time zone, as a local time.
+        // Additionally, RFC 2822 is "supported by all major implementations", so the plugin uses
+        // this fact to see if the input is a valid 12-hour time-of-day string. whew!
+        const strings = [
+            `${year}-${month}-${day}T${timeString}`, // 24-hour
+            `${year}-${month}-${day} ${timeString}` // 12-hour
+        ]
+
+        for (const string of strings) {
+            const timestamp = Date.parse(string)
+
+            if (!isNaN(timestamp)) {
+                return new Date(timestamp)
+            }
+        }
+
+        return null
+    }
+
+    /** @private */
+    populateList() {
+        if (this.list.querySelector(".time-picker-field__time-list__item")) {
+            return
+        }
+
+        const n = 24*60*60 / this.interval
+        const midnight = new Date().setHours(0, 0, 0, 0)
+        const fragment = document.createDocumentFragment()
+
+        for (let i = 0; i < n; i++) {
+            const date = new Date(midnight + i*this.interval*1000)
+            fragment.appendChild(this.makeListItem(date))
+        }
+
+        this.list.querySelector("ul").appendChild(fragment)
+    }
+
+    /** @private */
+    makeListItem(date) {
+        const item = document.createElement("li")
+        const value = TimePickerField.make24HourTimeString(date)
+        const text = this.formatter.format(date)
+
+        item.textContent = text
+        item.classList.add("time-picker-field__time-list__item")
+        item.tabIndex = "0"
+        item.dataset.localizedValue = text
+        item.dataset.value = value
+        item.addEventListener("click", (event) => {
+            this.setValue(value)
+            this.hidePicker()
+        })
+        item.addEventListener("keydown", (event) => {
+            switch (event.key) {
+            case "ArrowDown":
+                // Move focus to the next list item:
+                event.preventDefault()
+
+                if (item.nextElementSibling) {
+                    item.nextElementSibling.focus()
+                }
+
+                break
+            case "ArrowUp":
+                // Move focus to the previous list item, or the field if at the top of the list:
+                event.preventDefault()
+
+                if (item.previousElementSibling) {
+                    item.previousElementSibling.focus()
+                } else {
+                    this.input.focus()
+                }
+
+                break
+            case "Enter":
+                // Commit the highlighted list item:
+                debugger
+                event.preventDefault()
+                this.setValue(value)
+                this.hidePicker()
+                return false
+            }
+        })
+
+        return item
     }
 }
 

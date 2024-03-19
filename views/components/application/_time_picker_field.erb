@@ -7,23 +7,8 @@
   <div class="v-plugin--time-picker-field__input">
     <%= partial 'components/text_field', locals: {comp: comp} %>
   </div>
-  <% # the list of times will be hoisted up to the body via the JS plugin class. %>
+  <%# the list of times will be populated and hoisted up to the body via the JS plugin class. %>
   <div id="<%= comp.id %>__time-list" class="time-picker-field__time-list v-hidden">
-    <ul>
-      <% ((24*60*60) / comp.interval).times do |n| %>
-        <%
-          time = Time.zone.now.midnight + (n * comp.interval).seconds
-          value = time.strftime("%H:%M")
-          text = time.strftime("%-I:%M %p")
-        %>
-        <li data-value="<%= value %>"
-            data-text="<%= text %>"
-            data-index="<%= n %>"
-            class="time-picker-field__time-list__item"
-            tabindex="0">
-          <%= text %>
-        </li>
-      <% end %>
-    </ul>
+    <ul></ul>
   </div>
 </div>
