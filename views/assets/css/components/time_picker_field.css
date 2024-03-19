@@ -1,17 +1,14 @@
 .v-plugin--time-picker-field {
   position: relative;
-  z-index: 1;
 }
 
 .time-picker-field__time-list {
   position: absolute;
   max-height: 33vh;
   background: Canvas;
-  color: CanvasText;
   width: 100%;
   overflow: visible auto;
   filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.25));
-  padding: var(--v-padding2) 0;
   z-index: 1;
 }
 
@@ -22,7 +19,7 @@
 }
 
 .time-picker-field__time-list .time-picker-field__time-list__item {
-  padding: var(--v-padding2);
+  padding: var(--v-padding1) var(--v-padding2);
   cursor: pointer;
 }
 
