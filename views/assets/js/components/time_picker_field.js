@@ -7,6 +7,7 @@ class TimePickerField {
         // hoist list up to body to avoid z-index problems:
         document.body.append(this.list)
 
+        this.input.vComponent.prepareSubmit = this.prepareSubmit.bind(this)
         this.input.addEventListener("focus", this.showPicker.bind(this))
         this.input.addEventListener("blur", (event) => {
             if (event.relatedTarget && event.relatedTarget.offsetParent == this.list) {
@@ -111,6 +112,48 @@ class TimePickerField {
         this.input.vComponent.setValue(value)
         this.input.vComponent.validate()
         this.input.vComponent.mdcComponent.foundation_.notchOutline(Boolean(this.input.value))
+    }
+
+    validate(formData) {
+        if (!this.input.reportValidity()) {
+            return {[this.input.id]: this.input.validationMessage}
+        }
+
+        if (!this.input.value && !this.input.required) {
+            return true
+        }
+
+        // Attempt to parse the input's value to determine if it's valid:
+        const value = this.input.value
+        const now = new Date()
+        const year = now.getFullYear()
+        const month = now.getUTCMonth()
+        const day = now.getUTCDate()
+        const date = Date.parse(`${year}-${month}-${day}T${value}:00.000Z`)
+
+        if (isNaN(date)) {
+            return {[this.input.id]: "Not a valid time of day"}
+        }
+
+        return true
+    }
+
+    prepareSubmit(params) {
+        // TODO: use originalName junk so input displays locale-aware time but submits 24-hour time.
+        params.push([this.input.name, this.input.value])
+    }
+
+    reset() {
+        this.input.value = this.input.vComponent.originalValue
+    }
+
+    isDirty() {
+        return this.input.value.localeCompare(this.originalValue) != 0
+    }
+
+    destroy() {
+        // need to clean up the hoisted menu element:
+        this.list.remove()
     }
 
     /** @private */
