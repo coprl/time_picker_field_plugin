@@ -1,0 +1,2 @@
+require_relative 'time_picker_field/components/time_picker_field_dsl'
+require_relative 'time_picker_field/web_client/components/time_picker_field_render'
