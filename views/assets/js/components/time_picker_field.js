@@ -57,6 +57,14 @@ class TimePickerField {
             this.list.scrollTop = candidate.offsetTop
             candidate.classList.add("time-picker-field__time-list__item--candidate")
         })
+
+        if (this.input.value) {
+            const date = this.parseTimeString(this.input.value)
+
+            if (date) {
+                this.input.value = this.formatter.format(date)
+            }
+        }
     }
 
     showPicker() {
@@ -150,7 +158,6 @@ class TimePickerField {
         const year = now.getFullYear().toString()
         const month = (now.getMonth() + 1).toString().padStart(2, "0")
         const day = now.getDate().toString().padStart(2, "0")
-        debugger
 
         // The only valid format accepted by Date.parse is `YYYY-MM-DDTHH:mm:ss.sssZ`, although
         // some components "can be omitted". Here, the plugin omits the time zone offset so the
@@ -230,7 +237,6 @@ class TimePickerField {
                 break
             case "Enter":
                 // Commit the highlighted list item:
-                debugger
                 event.preventDefault()
                 this.setValue(value)
                 this.hidePicker()

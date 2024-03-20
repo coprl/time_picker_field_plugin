@@ -15,6 +15,15 @@ module Coprl
 
             expand!
           end
+
+          def value(value = nil)
+            case value
+            when Time, DateTime
+              super(value.strftime("%H:%M"))
+            else
+              super(value)
+            end
+          end
         end
       end
     end
