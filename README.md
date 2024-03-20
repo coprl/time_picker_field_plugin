@@ -8,7 +8,7 @@ field.
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'time_picker_field_presenter_plugin', git: 'https://github.com/coprl/time_picker_field_presenter_plugin', require: false
+gem 'time_picker_field_presenter_plugin', git: 'https://github.com/coprl/time_picker_field_plugin', require: false
 ```
 
 And then execute:
